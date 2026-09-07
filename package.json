@@ -1,0 +1,50 @@
+{
+  "name": "@pixelkit/cli",
+  "version": "1.0.0",
+  "description": "pixelkit doctor: tells you why a PixelKit hardware reading is unavailable instead of leaving you guessing.",
+  "keywords": [
+    "pixelkit",
+    "expo",
+    "react-native",
+    "android",
+    "pixel",
+    "cli",
+    "doctor",
+    "adb"
+  ],
+  "license": "MIT",
+  "author": "Traves Theberge",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PixelKit-Labs/pixelkit-cli.git"
+  },
+  "homepage": "https://github.com/PixelKit-Labs/pixelkit-cli#readme",
+  "bugs": {
+    "url": "https://github.com/PixelKit-Labs/pixelkit-cli/issues"
+  },
+  "bin": {
+    "pixelkit": "./build/index.js"
+  },
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "files": [
+    "build",
+    "index.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "@types/node": "^22.10.2"
+  }
+}

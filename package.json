@@ -1,6 +1,6 @@
 {
   "name": "@pixelkit-labs/cli",
-  "version": "1.4.3",
+  "version": "1.5.0",
   "description": "pixelkit doctor: tells you why a PixelKit hardware reading is unavailable instead of leaving you guessing.",
   "keywords": [
     "pixelkit",

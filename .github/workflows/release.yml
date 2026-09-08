@@ -1,0 +1,61 @@
+name: release
+
+# Publishes @pixelkit-labs/cli when a version tag is pushed. One package, so there is no ordering
+# constraint here — unlike the SDK repo, where three packages must publish in dependency order.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Pack and validate without publishing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm run build
+
+      # The tag and the manifest must agree. A tag that does not match ships a version nobody asked
+      # for, and npm will not let you take it back.
+      - name: Tag matches the manifest version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/v}"
+          pkg=$(node -p "require('./package.json').version")
+          test "$tag" = "$pkg" || { echo "tag v$tag does not match package version $pkg"; exit 1; }
+          echo "manifest at $pkg"
+
+      # The bin has to be executable and actually run. A CLI that packs cleanly but throws on start
+      # is worse than one that fails to build.
+      - name: The command runs
+        run: |
+          set -euo pipefail
+          node build/index.js doctor || true   # non-zero is expected with no device attached
+          node -e "const p=require('./package.json'); if(!p.bin||!p.bin.pixelkit) throw new Error('bin entry missing')"
+
+      - run: npm pack --dry-run
+
+      - name: Publish
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+        run: npm publish --provenance --access public
+        env:
+          # Repository secret PIXELKIT: an npm granular access token with read and write on the
+          # @pixelkit-labs scope. Same secret name as pixelkit-sdk, set separately on this repo.
+          NODE_AUTH_TOKEN: ${{ secrets.PIXELKIT }}

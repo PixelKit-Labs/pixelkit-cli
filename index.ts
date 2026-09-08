@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * @file packages/cli/index.ts
- * @description `pixelkit doctor`: the first and only command of `@pixelkit/cli`. PixelKit hooks
+ * @description `pixelkit doctor`: the first and only command of `@pixelkit-labs/cli`. PixelKit hooks
  * report `source: 'unavailable'` and render an em dash when a reading cannot be taken on real
  * hardware; on the wrong device, without a development build, or without the native packages
  * installed, every hook looks that way at once. `doctor` runs the checks a maintainer would run
  * by hand — adb on PATH, the connected device's identity, the installed development build,
- * whether `@pixelkit/native` and `@pixelkit/mlkit` resolve from the current project, AICore, and
+ * whether `@pixelkit-labs/native` and `@pixelkit-labs/mlkit` resolve from the current project, AICore, and
  * the Metro port forward — and reports each as pass, fail, not-applicable, or "could not
  * determine" when the check itself could not be run. No dependency other than Node's
  * `child_process` and `util`; nothing here is guessed.
@@ -260,7 +260,7 @@ async function checkDeviceIdentity(
 /**
  * Check 3: whether a PixelKit-based development build is installed (`adb shell pm path
  * <package>`), keyed off `--package` (default `com.pixelkit.sdk`). Expo Go can never satisfy this
- * check: `@pixelkit/native` and `@pixelkit/mlkit` are Kotlin Expo Modules that must be compiled
+ * check: `@pixelkit-labs/native` and `@pixelkit-labs/mlkit` are Kotlin Expo Modules that must be compiled
  * into a development build, so that limitation is stated regardless of the result.
  */
 async function checkDevBuild(serial: string | null, packageId: string): Promise<CheckResult> {
@@ -271,7 +271,7 @@ async function checkDevBuild(serial: string | null, packageId: string): Promise<
   const res = await runAdb(['-s', serial, 'shell', 'pm', 'path', packageId]);
   const installed = res.ok && /^package:/m.test(res.stdout.trim());
   const goNote =
-    'Expo Go can never run PixelKit: @pixelkit/native and @pixelkit/mlkit are compiled Kotlin Expo Modules, so a development build is required.';
+    'Expo Go can never run PixelKit: @pixelkit-labs/native and @pixelkit-labs/mlkit are compiled Kotlin Expo Modules, so a development build is required.';
 
   if (installed) {
     return {
@@ -290,9 +290,9 @@ async function checkDevBuild(serial: string | null, packageId: string): Promise<
 }
 
 /**
- * Check 4: whether `@pixelkit/native` and `@pixelkit/mlkit` resolve from the current project
+ * Check 4: whether `@pixelkit-labs/native` and `@pixelkit-labs/mlkit` resolve from the current project
  * (`require.resolve` from `process.cwd()`, walking the real node_modules chain — nothing is
- * assumed from package.json alone). `@pixelkit/mlkit` is opt-in, so its absence is reported as
+ * assumed from package.json alone). `@pixelkit-labs/mlkit` is opt-in, so its absence is reported as
  * informational (`n/a`), never a failure.
  */
 function resolveFrom(name: string, cwd: string): { ok: true; path: string } | { ok: false; error: string } {
@@ -305,37 +305,37 @@ function resolveFrom(name: string, cwd: string): { ok: true; path: string } | { 
 }
 
 function checkNativeModules(cwd: string): CheckResult[] {
-  const native = resolveFrom('@pixelkit/native', cwd);
-  const mlkit = resolveFrom('@pixelkit/mlkit', cwd);
+  const native = resolveFrom('@pixelkit-labs/native', cwd);
+  const mlkit = resolveFrom('@pixelkit-labs/mlkit', cwd);
   const results: CheckResult[] = [];
 
   if (native.ok) {
     results.push({
-      name: '@pixelkit/native resolvable',
+      name: '@pixelkit-labs/native resolvable',
       status: 'pass',
       reason: `resolved from ${native.path}. Silicon (SoC, CPU, memory, thermal, GPU), display, torch and haptics hooks are available.`,
     });
   } else {
     results.push({
-      name: '@pixelkit/native resolvable',
+      name: '@pixelkit-labs/native resolvable',
       status: 'fail',
       reason: `not resolvable from ${cwd}. Silicon, display, torch and haptics hooks will report source: "unavailable".`,
-      fix: 'npm install @pixelkit/native (or install `pixelkit`, which depends on it directly).',
+      fix: 'npm install @pixelkit-labs/native (or install `@pixelkit-labs/sdk`, which depends on it directly).',
     });
   }
 
   if (mlkit.ok) {
     results.push({
-      name: '@pixelkit/mlkit resolvable',
+      name: '@pixelkit-labs/mlkit resolvable',
       status: 'pass',
       reason: `resolved from ${mlkit.path}. Gemini Nano / on-device ML Kit hooks are available.`,
     });
   } else {
     results.push({
-      name: '@pixelkit/mlkit resolvable',
+      name: '@pixelkit-labs/mlkit resolvable',
       status: 'n/a',
       reason: `not resolvable from ${cwd}. This is opt-in, not a failure — Gemini Nano / on-device ML Kit hooks report source: "unavailable" without it.`,
-      fix: 'npm install @pixelkit/mlkit to enable on-device ML Kit hooks.',
+      fix: 'npm install @pixelkit-labs/mlkit to enable on-device ML Kit hooks.',
     });
   }
 
@@ -361,7 +361,7 @@ async function checkAiCore(serial: string | null, manufacturer: string | null): 
 
   const present = res.stdout.toLowerCase().includes('aicore');
   if (present) {
-    return { name: 'AICore', status: 'pass', reason: 'a package matching "aicore" is installed. Gemini Nano can run through @pixelkit/mlkit.' };
+    return { name: 'AICore', status: 'pass', reason: 'a package matching "aicore" is installed. Gemini Nano can run through @pixelkit-labs/mlkit.' };
   }
 
   return {

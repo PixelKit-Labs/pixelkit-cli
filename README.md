@@ -1,4 +1,4 @@
-# @pixelkit/cli
+# @pixelkit-labs/cli
 
 Command-line diagnostics for [PixelKit](https://www.npmjs.com/package/pixelkit). Its only command,
 `pixelkit doctor`, answers "why is everything showing —?" before you file an issue.
@@ -11,13 +11,13 @@ checks a maintainer would run by hand.
 **Zero third-party dependencies.** It uses only Node's `child_process` and `util`.
 
 ```bash
-npx @pixelkit/cli doctor
+npx @pixelkit-labs/cli doctor
 ```
 
 or, installed as a dev dependency:
 
 ```bash
-npm install --save-dev @pixelkit/cli
+npm install --save-dev @pixelkit-labs/cli
 npx pixelkit doctor
 ```
 
@@ -30,10 +30,10 @@ npx pixelkit doctor
    `unavailable` otherwise.
 3. **Whether a PixelKit-based development build is installed** (`adb shell pm path <package>`),
    keyed off `--package` (default `com.pixelkit.sdk`). Expo Go can never satisfy this: the Kotlin
-   Expo Modules (`@pixelkit/native`, `@pixelkit/mlkit`) must be compiled in.
-4. **Whether `@pixelkit/native` and `@pixelkit/mlkit` resolve from the current project**
+   Expo Modules (`@pixelkit-labs/native`, `@pixelkit-labs/mlkit`) must be compiled in.
+4. **Whether `@pixelkit-labs/native` and `@pixelkit-labs/mlkit` resolve from the current project**
    (`require.resolve` from the working directory), and which hook groups are therefore available.
-   A missing `@pixelkit/mlkit` is reported as informational, not a failure — it is the opt-in ML
+   A missing `@pixelkit-labs/mlkit` is reported as informational, not a failure — it is the opt-in ML
    Kit package.
 5. **Whether AICore is present on the device** (`adb shell pm list packages`, matched for
    "aicore"), which Gemini Nano needs. Not-applicable on a non-Pixel.

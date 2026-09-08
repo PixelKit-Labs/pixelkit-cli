@@ -1,6 +1,6 @@
 # @pixelkit-labs/cli
 
-Command-line diagnostics for [PixelKit](https://www.npmjs.com/package/pixelkit). Its only command,
+Command-line diagnostics for [PixelKit](https://www.npmjs.com/package/@pixelkit-labs/sdk). Its only command,
 `pixelkit doctor`, answers "why is everything showing —?" before you file an issue.
 
 PixelKit hooks report `source: 'unavailable'` and render an em dash when a reading cannot be taken
@@ -40,7 +40,7 @@ npx pixelkit doctor
 6. **Whether `adb reverse tcp:8081 tcp:8081` is set**, so a development client can reach Metro on
    localhost.
 
-Each check is reported as `PASS`, `FAIL`, `N/A`, or `????` ("could not be determined" — the check
+Each check is reported as `PASS`, `FAIL`, `N/A` or `UNKN` ("could not be determined" — the check
 itself could not be run, for example because adb is missing or the device went offline).
 `doctor` never guesses a result: an inconclusive check is reported as such, the same discipline
 PixelKit hooks use for `source: 'unavailable'`.

@@ -61,4 +61,9 @@ pixelkit doctor [--package <id>] [--serial <serial>]
 `0` when every check passed or was not applicable. `1` when any check failed, or could not be
 determined at all.
 
+## Documentation
+
+[https://pixelkit-labs.github.io/pixelkit-docs/](https://pixelkit-labs.github.io/pixelkit-docs/) covers the hooks this command
+diagnoses: each one's inputs, outputs, and what `source: 'unavailable'` means for it.
+
 MIT

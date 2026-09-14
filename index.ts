@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @file packages/cli/index.ts
+ * @file index.ts
  * @description `pixelkit doctor`: the first and only command of `@pixelkit-labs/cli`. PixelKit hooks
  * report `source: 'unavailable'` and render an em dash when a reading cannot be taken on real
  * hardware; on the wrong device, without a development build, or without the native packages

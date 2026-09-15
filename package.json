@@ -1,6 +1,6 @@
 {
   "name": "@pixelkit-labs/cli",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "description": "pixelkit doctor: tells you why a PixelKit hardware reading is unavailable instead of leaving you guessing.",
   "keywords": [
     "pixelkit",
@@ -23,7 +23,7 @@
     "url": "https://github.com/PixelKit-Labs/pixelkit-cli/issues"
   },
   "bin": {
-    "pixelkit": "./build/index.js"
+    "pixelkit": "build/index.js"
   },
   "main": "build/index.js",
   "types": "build/index.d.ts",

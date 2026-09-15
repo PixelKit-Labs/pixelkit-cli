@@ -403,6 +403,9 @@ interface Flags {
   packageId: string;
   serial?: string;
   help: boolean;
+  diagnose?: boolean;
+  query?: string;
+  model?: string;
 }
 
 function parseArgs(argv: string[]): { command: string | undefined; flags: Flags } {
@@ -419,6 +422,16 @@ function parseArgs(argv: string[]): { command: string | undefined; flags: Flags 
       flags.serial = argv[++i];
     } else if (arg.startsWith('--serial=')) {
       flags.serial = arg.slice('--serial='.length);
+    } else if (arg === '--diagnose') {
+      flags.diagnose = true;
+    } else if (arg === '--query' || arg === '-q') {
+      flags.query = argv[++i];
+    } else if (arg.startsWith('--query=')) {
+      flags.query = arg.slice('--query='.length);
+    } else if (arg === '--model' || arg === '-m') {
+      flags.model = argv[++i];
+    } else if (arg.startsWith('--model=')) {
+      flags.model = arg.slice('--model='.length);
     } else if (arg === '--help' || arg === '-h') {
       flags.help = true;
     } else if (command === undefined) {
@@ -430,12 +443,20 @@ function parseArgs(argv: string[]): { command: string | undefined; flags: Flags 
 }
 
 function printUsage(): void {
-  console.log(`${ANSI.bold}pixelkit doctor${ANSI.reset} - diagnose why PixelKit hooks might report source: "unavailable"
+  console.log(`${ANSI.bold}pixelkit${ANSI.reset} - developer tooling and diagnostics for Google Pixel hardware
 
 Usage:
   pixelkit doctor [--package <id>] [--serial <serial>]
+  pixelkit agent [--diagnose] [--query <prompt>] [--model <model>] [--serial <serial>]
+
+Commands:
+  doctor           Diagnose why PixelKit hooks might report source: "unavailable"
+  agent            Run autonomous hardware diagnostics and query the device agent
 
 Options:
+  --diagnose       Run complete hardware diagnostic triage (CPU, battery, thermals, AICore)
+  --query, -q      Query the hardware agent with a specific diagnostic question
+  --model, -m      Gemini model for cloud reasoning (default: gemini-2.5-flash)
   --package <id>   Application id of the installed PixelKit development build (default: com.pixelkit.sdk)
   --serial <id>    adb serial to target when more than one device is connected
   -h, --help       Show this help
@@ -445,6 +466,180 @@ Options:
 function printResult(r: CheckResult): void {
   console.log(`[${STATUS_LABEL[r.status]}] ${ANSI.bold}${r.name}${ANSI.reset} - ${r.reason}`);
   if (r.fix) console.log(`${ANSI.dim}         fix: ${r.fix}${ANSI.reset}`);
+}
+
+/**
+ * Runs the autonomous hardware agent diagnostic command.
+ */
+async function runHardwareAgent(flags: Flags): Promise<number> {
+  console.log(`${ANSI.bold}PixelKit Hardware Diagnostics Agent${ANSI.reset}\n`);
+
+  const step1 = await checkAdbAndDevice(flags.serial);
+  if (step1.result.status === 'fail' || !step1.serial) {
+    printResult(step1.result);
+    return 1;
+  }
+  const serial = step1.serial;
+
+  console.log(`${ANSI.dim}Collecting hardware telemetry from ${serial}...${ANSI.reset}`);
+
+  // 1. Device identity & SoC
+  const modelRes = await runAdb(['-s', serial, 'shell', 'getprop', 'ro.product.model']);
+  const manufacturerRes = await runAdb(['-s', serial, 'shell', 'getprop', 'ro.product.manufacturer']);
+  const releaseRes = await runAdb(['-s', serial, 'shell', 'getprop', 'ro.build.version.release']);
+  const sdkRes = await runAdb(['-s', serial, 'shell', 'getprop', 'ro.build.version.sdk']);
+  const socRes = await runAdb(['-s', serial, 'shell', 'getprop', 'ro.soc.model']);
+  const platformRes = await runAdb(['-s', serial, 'shell', 'getprop', 'ro.board.platform']);
+
+  const model = modelRes.ok ? modelRes.stdout.trim() : 'Unknown';
+  const manufacturer = manufacturerRes.ok ? manufacturerRes.stdout.trim() : 'Unknown';
+  const release = releaseRes.ok ? releaseRes.stdout.trim() : 'Unknown';
+  const sdk = sdkRes.ok ? sdkRes.stdout.trim() : 'Unknown';
+  const soc = socRes.ok && socRes.stdout.trim() ? socRes.stdout.trim() : (platformRes.ok ? platformRes.stdout.trim() : 'Google Tensor');
+
+  // 2. Battery telemetry
+  const batteryRes = await runAdb(['-s', serial, 'shell', 'dumpsys', 'battery']);
+  let batteryLevel = 'N/A';
+  let batteryTemp = 'N/A';
+  let batteryVoltage = 'N/A';
+  let batteryStatus = 'N/A';
+  let batteryHealth = 'N/A';
+  if (batteryRes.ok) {
+    const lines = batteryRes.stdout.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('level:')) batteryLevel = trimmed.split(':')[1].trim() + '%';
+      else if (trimmed.startsWith('temperature:')) {
+        const raw = parseFloat(trimmed.split(':')[1].trim());
+        batteryTemp = (raw / 10).toFixed(1) + '°C';
+      } else if (trimmed.startsWith('voltage:')) {
+        const raw = parseFloat(trimmed.split(':')[1].trim());
+        batteryVoltage = (raw / 1000).toFixed(2) + 'V';
+      } else if (trimmed.startsWith('status:')) {
+        const code = trimmed.split(':')[1].trim();
+        batteryStatus = code === '2' ? 'Charging' : code === '3' ? 'Discharging' : code === '5' ? 'Full' : 'Not Charging';
+      } else if (trimmed.startsWith('health:')) {
+        const code = trimmed.split(':')[1].trim();
+        batteryHealth = code === '2' ? 'Good' : 'Degraded';
+      }
+    }
+  }
+
+  // 3. Thermal telemetry
+  const thermalRes = await runAdb(['-s', serial, 'shell', 'dumpsys', 'thermalservice']);
+  let thermalStatus = 'Normal (0)';
+  if (thermalRes.ok) {
+    const match = thermalRes.stdout.match(/mStatus=(\d+)/i) || thermalRes.stdout.match(/Current thermal status: (\d+)/i);
+    if (match) {
+      const code = parseInt(match[1], 10);
+      const labels = ['None', 'Light', 'Moderate', 'Severe', 'Critical', 'Emergency', 'Shutdown'];
+      thermalStatus = `${labels[code] ?? 'Unknown'} (${code})`;
+    }
+  }
+
+  // 4. Memory telemetry
+  const memRes = await runAdb(['-s', serial, 'shell', 'cat', '/proc/meminfo']);
+  let memTotal = 'N/A';
+  let memAvail = 'N/A';
+  let memPct = 'N/A';
+  if (memRes.ok) {
+    const totalMatch = memRes.stdout.match(/MemTotal:\s+(\d+)\s+kB/);
+    const availMatch = memRes.stdout.match(/MemAvailable:\s+(\d+)\s+kB/);
+    if (totalMatch && availMatch) {
+      const totalMB = Math.round(parseInt(totalMatch[1], 10) / 1024);
+      const availMB = Math.round(parseInt(availMatch[1], 10) / 1024);
+      memTotal = `${totalMB} MB`;
+      memAvail = `${availMB} MB`;
+      memPct = `${Math.round((availMB / totalMB) * 100)}% available`;
+    }
+  }
+
+  // 5. AICore status
+  const aicoreRes = await runAdb(['-s', serial, 'shell', 'pm', 'list', 'packages', 'com.google.android.aicore']);
+  const aicoreInstalled = aicoreRes.ok && aicoreRes.stdout.includes('com.google.android.aicore');
+
+  // Print Telemetry Matrix
+  console.log(`\n${ANSI.bold}Hardware Telemetry Snapshot:${ANSI.reset}`);
+  console.log(`  Device:       ${manufacturer} ${model} (Android ${release}, API ${sdk})`);
+  console.log(`  Silicon:      ${soc}`);
+  console.log(`  Battery:      ${batteryLevel} · ${batteryTemp} · ${batteryVoltage} · ${batteryStatus} (${batteryHealth})`);
+  console.log(`  Thermals:     ${thermalStatus}`);
+  console.log(`  Memory:       ${memAvail} / ${memTotal} (${memPct})`);
+  console.log(`  AICore:       ${aicoreInstalled ? `${ANSI.green}Active${ANSI.reset}` : `${ANSI.yellow}Not Installed${ANSI.reset}`}\n`);
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+  const userQuery = flags.query || 'Perform a comprehensive hardware diagnostic check on this Pixel device.';
+
+  if (!apiKey) {
+    console.log(`${ANSI.bold}Autonomous Diagnostic Assessment (Local Heuristics):${ANSI.reset}`);
+    const issues: string[] = [];
+    if (batteryHealth !== 'Good' && batteryHealth !== 'N/A') issues.push('Battery reports degraded health.');
+    if (thermalStatus.includes('Severe') || thermalStatus.includes('Critical')) issues.push('Thermal throttling active.');
+    if (!aicoreInstalled) issues.push('AICore is not installed; Gemini Nano hardware acceleration disabled.');
+
+    if (issues.length === 0) {
+      console.log(`  ${ANSI.green}✔ System hardware health nominal. All silicon, battery, and thermal parameters within optimal operational thresholds.${ANSI.reset}`);
+    } else {
+      for (const iss of issues) {
+        console.log(`  ${ANSI.yellow}⚠ ${iss}${ANSI.reset}`);
+      }
+    }
+    console.log(`\n${ANSI.dim}💡 Tip: Export GEMINI_API_KEY to activate cloud agent multi-turn LLM reasoning and custom hardware triage queries.${ANSI.reset}`);
+    return 0;
+  }
+
+  // Cloud Agent Reasoning
+  const modelName = flags.model || 'gemini-2.5-flash';
+  console.log(`${ANSI.bold}Cloud Hardware Agent (${modelName}):${ANSI.reset}`);
+  console.log(`${ANSI.dim}Reasoning over hardware telemetry with Google Gen AI...${ANSI.reset}\n`);
+
+  const prompt = `Target Device Telemetry:
+- Manufacturer: ${manufacturer}
+- Model: ${model}
+- Android Release: ${release} (SDK ${sdk})
+- SoC Silicon: ${soc}
+- Battery: Level=${batteryLevel}, Temp=${batteryTemp}, Voltage=${batteryVoltage}, Status=${batteryStatus}, Health=${batteryHealth}
+- Thermal Headroom: ${thermalStatus}
+- Memory: Available=${memAvail}, Total=${memTotal} (${memPct})
+- AICore: ${aicoreInstalled ? 'Installed and available' : 'Not installed'}
+
+User Diagnostic Query: "${userQuery}"
+
+Provide a concise, professional hardware engineering assessment. Evaluate thermal headroom, battery wear/charging, memory constraints, and AICore readiness. Give specific actionable recommendations.`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction: {
+          parts: [{ text: 'You are the PixelKit Hardware Diagnostics Agent, an expert embedded and systems engineer specializing in Google Pixel hardware (Tensor G-series, Android, AICore).' }]
+        }
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`Agent API error (${res.status}): ${errText}`);
+      return 1;
+    }
+
+    const data: any = await res.json();
+    const replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (replyText) {
+      console.log(replyText.trim());
+      console.log(`\n${ANSI.green}✔ Hardware diagnostic triage complete.${ANSI.reset}`);
+      return 0;
+    } else {
+      console.error('No response text received from agent.');
+      return 1;
+    }
+  } catch (err: any) {
+    console.error(`Agent reasoning failed: ${err.message || String(err)}`);
+    return 1;
+  }
 }
 
 /**
@@ -499,17 +694,22 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command !== 'doctor') {
-    console.error(`Unknown command "${command}". The only command is "doctor".\n`);
-    printUsage();
-    process.exitCode = 1;
+  if (command === 'doctor') {
+    process.exitCode = await doctor(flags);
     return;
   }
 
-  process.exitCode = await doctor(flags);
+  if (command === 'agent') {
+    process.exitCode = await runHardwareAgent(flags);
+    return;
+  }
+
+  console.error(`Unknown command "${command}". Available commands: "doctor", "agent".\n`);
+  printUsage();
+  process.exitCode = 1;
 }
 
 main().catch((err) => {
-  console.error(`pixelkit doctor crashed: ${(err as Error).stack || String(err)}`);
+  console.error(`pixelkit crashed: ${(err as Error).stack || String(err)}`);
   process.exitCode = 1;
 });

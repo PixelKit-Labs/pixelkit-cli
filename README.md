@@ -1,24 +1,25 @@
 # @pixelkit-labs/cli
 
-Command-line diagnostics for [PixelKit](https://www.npmjs.com/package/@pixelkit-labs/sdk). Its only command,
-`pixelkit doctor`, answers "why is everything showing —?" before you file an issue.
+Command-line diagnostics and autonomous hardware agents for [PixelKit](https://www.npmjs.com/package/@pixelkit-labs/sdk).
+- `pixelkit doctor`: answers "why is everything showing —?" before you file an issue.
+- `pixelkit agent`: runs autonomous on-device hardware telemetry triage (CPU, battery, thermals, AICore) and queries the Google Gen AI hardware agent.
 
 PixelKit hooks report `source: 'unavailable'` and render an em dash when a reading cannot be taken
 on real hardware. That is correct behaviour, but on the wrong device, without a development build,
-or without the native packages installed, every hook looks that way at once. `doctor` runs the
-checks a maintainer would run by hand.
+or without the native packages installed, every hook looks that way at once. `doctor` and `agent`
+run the checks and diagnostics an expert systems engineer would run by hand.
 
-**Zero third-party dependencies.** It uses only Node's `child_process` and `util`.
+**Zero third-party dependencies.** It uses only Node's `child_process`, `util`, and native `fetch`.
 
 ```bash
+# Verify environment readiness
 npx @pixelkit-labs/cli doctor
-```
 
-or, installed as a dev dependency:
+# Run autonomous hardware diagnostic triage
+npx @pixelkit-labs/cli agent --diagnose
 
-```bash
-npm install --save-dev @pixelkit-labs/cli
-npx pixelkit doctor
+# Query the hardware agent with custom diagnostic prompt
+npx @pixelkit-labs/cli agent --query "Check battery wear and thermal throttling headroom"
 ```
 
 ## What it checks

@@ -1,70 +1,82 @@
 # @pixelkit-labs/cli
 
-Command-line diagnostics and autonomous hardware agents for [PixelKit](https://www.npmjs.com/package/@pixelkit-labs/sdk).
-- `pixelkit doctor`: answers "why is everything showing —?" before you file an issue.
-- `pixelkit agent`: runs autonomous on-device hardware telemetry triage (CPU, battery, thermals, AICore) and queries the Google Gen AI hardware agent.
+Command-line diagnostics and autonomous hardware triage agents for [PixelKit](https://www.npmjs.com/package/@pixelkit-labs/sdk).
 
-PixelKit hooks report `source: 'unavailable'` and render an em dash when a reading cannot be taken
-on real hardware. That is correct behaviour, but on the wrong device, without a development build,
-or without the native packages installed, every hook looks that way at once. `doctor` and `agent`
-run the checks and diagnostics an expert systems engineer would run by hand.
+- **`pixelkit doctor`**: Validates device connectivity, ADB authorization, development build installation, and AICore readiness.
+- **`pixelkit agent`**: Runs autonomous on-device hardware telemetry triage (CPU clusters, battery health, thermal throttling headroom, AICore) and queries Google Gen AI hardware triage agents.
 
-**Zero third-party dependencies.** It uses only Node's `child_process`, `util`, and native `fetch`.
+**Zero third-party dependencies.** Built entirely on Node.js native `child_process`, `util`, and `fetch`.
+
+---
+
+## Quickstart
 
 ```bash
-# Verify environment readiness
+# Verify your device and development environment
 npx @pixelkit-labs/cli doctor
 
-# Run autonomous hardware diagnostic triage
+# Run autonomous hardware diagnostic triage on the connected device
 npx @pixelkit-labs/cli agent --diagnose
 
-# Query the hardware agent with custom diagnostic prompt
-npx @pixelkit-labs/cli agent --query "Check battery wear and thermal throttling headroom"
+# Query the hardware agent with a specific question or instruction
+npx @pixelkit-labs/cli agent --query "Analyze battery health and thermal headroom under heavy load"
 ```
 
-## What it checks
+---
 
-1. **adb on PATH and exactly one device connected** (`adb devices`). If several devices are
-   connected, they are listed and you are told to pass `--serial`.
-2. **The connected device's identity** — manufacturer, model, Android release, SDK int
-   (`adb shell getprop`). States plainly whether it is a Pixel, because most hooks report
-   `unavailable` otherwise.
-3. **Whether a PixelKit-based development build is installed** (`adb shell pm path <package>`),
-   keyed off `--package` (default `com.pixelkit.sdk`). Expo Go can never satisfy this: the Kotlin
-   Expo Modules (`@pixelkit-labs/native`, `@pixelkit-labs/mlkit`) must be compiled in.
-4. **Whether `@pixelkit-labs/native` and `@pixelkit-labs/mlkit` resolve from the current project**
-   (`require.resolve` from the working directory), and which hook groups are therefore available.
-   A missing `@pixelkit-labs/mlkit` is reported as informational, not a failure — it is the opt-in ML
-   Kit package.
-5. **Whether AICore is present on the device** (`adb shell pm list packages`, matched for
-   "aicore"), which Gemini Nano needs. Not-applicable on a non-Pixel.
-6. **Whether `adb reverse tcp:8081 tcp:8081` is set**, so a development client can reach Metro on
-   localhost.
+## Commands
 
-Each check is reported as `PASS`, `FAIL`, `N/A` or `UNKN` ("could not be determined" — the check
-itself could not be run, for example because adb is missing or the device went offline).
-`doctor` never guesses a result: an inconclusive check is reported as such, the same discipline
-PixelKit hooks use for `source: 'unavailable'`.
+### `pixelkit doctor`
 
-## Options
+Performs end-to-end environment and device health checks:
 
-```
+1. **ADB Connectivity**: Verifies ADB is in `PATH` and identifies connected devices (`adb devices`).
+2. **Device Hardware Identity**: Inspects manufacturer, model, Android release, and SDK API level via `getprop`. Verifies Google Pixel hardware features.
+3. **Development Build Verification**: Confirms a development build containing the Kotlin native modules is installed (`adb shell pm path <package>`).
+4. **Native Module Resolution**: Checks whether `@pixelkit-labs/native` and `@pixelkit-labs/mlkit` resolve in the active project.
+5. **AICore & TPU Readiness**: Inspects whether the Google AICore system service is present on-device for Gemini Nano edge execution.
+6. **Port Reverse Setup**: Verifies `adb reverse tcp:8081 tcp:8081` is configured for Metro bundler communication.
+
+```bash
 pixelkit doctor [--package <id>] [--serial <serial>]
-
-  --package <id>   Application id of the installed PixelKit development build
-                    (default: com.pixelkit.sdk)
-  --serial <id>    adb serial to target when more than one device is connected
-  -h, --help        Show help
 ```
 
-## Exit code
+#### Options:
+- `--package <id>`: Application ID of the installed development build (default: `com.pixelkit.sdk`).
+- `--serial <id>`: Target a specific device serial when multiple devices/emulators are connected.
 
-`0` when every check passed or was not applicable. `1` when any check failed, or could not be
-determined at all.
+---
+
+### `pixelkit agent`
+
+Interacts with the Google Gen AI hardware intelligence agent to inspect and diagnose device telemetry:
+
+```bash
+# Full automated hardware diagnosis
+npx @pixelkit-labs/cli agent --diagnose
+
+# Interactive query targeting a specific subsystem
+npx @pixelkit-labs/cli agent --query "Check Wi-Fi 7 MLO and thermal status"
+
+# Select model (defaults to gemini-2.5-flash)
+npx @pixelkit-labs/cli agent --diagnose --model gemini-2.5-pro
+```
+
+#### Options:
+- `--diagnose`: Collects real-time CPU, thermal, battery, and AICore telemetry and generates a structured verdict (`healthy`, `warning`, `critical`) with actionable recommendations.
+- `--query <text>`: Asks the hardware diagnostic agent a custom question or gives it a specific analysis task.
+- `--model <name>`: Specifies the Gemini model (default: `gemini-2.5-flash`).
+- `--serial <id>`: Target device serial.
+
+---
 
 ## Documentation
 
-[https://pixelkit-labs.github.io/pixelkit-docs/](https://pixelkit-labs.github.io/pixelkit-docs/) covers the hooks this command
-diagnoses: each one's inputs, outputs, and what `source: 'unavailable'` means for it.
+For full details on the PixelKit SDK, native modules, and hooks:
+[https://pixelkit-labs.github.io/pixelkit-docs/](https://pixelkit-labs.github.io/pixelkit-docs/)
 
-MIT
+---
+
+## License
+
+MIT © PixelKit Labs
